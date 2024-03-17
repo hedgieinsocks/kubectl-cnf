@@ -9,7 +9,7 @@ kcnf() {
     | sort -k2 \
     | fzf --cycle --layout=reverse --query "${*:-}" --with-nth=2)
 
-  [[ -n "${config}" ]] || return
+  [[ -n "${config}" ]] || return 0
 
   export KUBECONFIG="${config%% *}"
   export KUBECONTEXT="${config##* }"

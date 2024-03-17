@@ -2,19 +2,26 @@
 
 KCNF_DIR="${KCNF_DIR:-$HOME/.kube/configs}"
 KCNF_VERBOSE="${KCNF_VERBOSE:-true}"
+KCNF_SUBSHELL="${KCNF_SUBSHELL:-true}"
 
 main() {
   local config
 
-  hash fzf || exit 1
+  hash fzf || return 1
 
   config=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} + \
     | sort -k2 \
     | fzf --cycle --layout=reverse --query "${*:-}" --with-nth=2)
 
-  [[ -n "${config}" ]] || return
+  [[ -n "${config}" ]] || return 0
 
   export KUBECONFIG="${config%% *}"
+
+  if [[ "${KCNF_SUBSHELL}" != true ]]; then
+    echo "export KUBECONFIG='${KUBECONFIG}'"
+    return 0
+  fi
+
   export KUBECONTEXT="${config##* }"
 
   [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇲ entered subshell with kubecontext: ${KUBECONTEXT}"
