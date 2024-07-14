@@ -3,14 +3,25 @@
 kcnf() {
   local config
 
-  hash fzf || return 1
+  hash fzf bat || return 1
+  mkdir -p "${KCNF_DIR:-$HOME/.kube/configs}"
 
   config=$(find "${KCNF_DIR:-$HOME/.kube/configs}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} + \
     | sort -k2 \
-    | fzf --cycle --layout=reverse --query "${*:-}" --with-nth=2)
+    | fzf \
+      --cycle \
+      --height="${KCNF_HEIGHT:-40%}" \
+      --layout=reverse \
+      --with-nth=2 \
+      --query="${*:-}" \
+      --bind="tab:toggle-preview" \
+      --preview="bat --style=plain --color=always --language=yaml {1}" \
+      --preview-window="hidden,wrap,75%")
 
-  [[ -n "${config}" ]] || return 0
+  if [[ -n "${config}" ]]; then
+    export KUBECONFIG="${config%% *}"
+    export KUBECONTEXT="${config##* }"
+  fi
 
-  export KUBECONFIG="${config%% *}"
-  export KUBECONTEXT="${config##* }"
+  return 0
 }

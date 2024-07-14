@@ -1,18 +1,29 @@
 #!/usr/bin/env bash
 
+[[ -n "${DEBUG}" ]] && set -x
+
 KCNF_DIR="${KCNF_DIR:-$HOME/.kube/configs}"
 KCNF_VERBOSE="${KCNF_VERBOSE:-true}"
 KCNF_SUBSHELL="${KCNF_SUBSHELL:-true}"
+KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
 
 main() {
   local config
 
-  hash fzf || return 1
+  hash fzf bat || return 1
+  mkdir -p "${KCNF_DIR}"
 
   config=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} + \
     | sort -k2 \
-    | fzf --cycle --layout=reverse --query "${*:-}" --with-nth=2)
-
+    | fzf \
+      --cycle \
+      --height="${KCNF_HEIGHT}" \
+      --layout=reverse \
+      --with-nth=2 \
+      --query="${*:-}" \
+      --bind="tab:toggle-preview" \
+      --preview="bat --style=plain --color=always --language=yaml {1}" \
+      --preview-window="hidden,wrap,75%")
   [[ -n "${config}" ]] || return 0
 
   export KUBECONFIG="${config%% *}"
