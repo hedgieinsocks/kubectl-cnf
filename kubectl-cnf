@@ -8,6 +8,8 @@ KCNF_VERBOSE="${KCNF_VERBOSE:-true}"
 KCNF_SUBSHELL="${KCNF_SUBSHELL:-true}"
 KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
 
+DEPENDENCIES=(fzf bat)
+
 ### show help message and exit
 # arg: none
 show_help() {
@@ -19,6 +21,13 @@ Usage:
 
 Flags:
   -h, --help    show this message
+
+Dependencies:
+  fzf - https://github.com/junegunn/fzf
+  bat - https://github.com/sharkdp/bat
+
+Prerequisites:
+  directory '${KCNF_DIR}' populated with kubeconfig files
 EOF
   exit 0
 }
@@ -26,7 +35,11 @@ EOF
 ### ensure that dependencies are installed
 # arg: none
 check_requirements() {
-  hash fzf bat || err "some dependencies are missing"
+  local dep
+
+  for dep in "${DEPENDENCIES[@]}"; do
+    hash "${dep}" 2>/dev/null || err "missing dependency: ${dep}"
+  done
 }
 
 ### show error message and exit
@@ -40,7 +53,7 @@ main() {
   local kubeconfigs selected_kubeconfig
 
   check_requirements
-  [[ "$1" =~ ^(-h|--help)$ ]] && show_help
+  [[ " $@ " =~ ( -h | --help ) ]] && show_help
 
   [[ -d "${KCNF_DIR}" ]] || err "directory does not exist: ${KCNF_DIR}"
   kubeconfigs=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} +)

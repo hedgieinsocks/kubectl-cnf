@@ -35,6 +35,13 @@ Usage:
 
 Flags:
   -h, --help    show this message
+
+Dependencies:
+  fzf - https://github.com/junegunn/fzf
+  bat - https://github.com/sharkdp/bat
+
+Prerequisites:
+  directory '/home/user/.kube/configs' populated with kubeconfig files
 ```
 
 You can press `TAB` to preview the kubeconfig of the selected context.
