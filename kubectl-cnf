@@ -1,45 +1,76 @@
 #!/usr/bin/env bash
 
 [[ -n "${DEBUG}" ]] && set -x
+set -eo pipefail
 
 KCNF_DIR="${KCNF_DIR:-$HOME/.kube/configs}"
 KCNF_VERBOSE="${KCNF_VERBOSE:-true}"
 KCNF_SUBSHELL="${KCNF_SUBSHELL:-true}"
 KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
 
+### show help message and exit
+# arg: none
+show_help() {
+  cat << EOF | bat --style=plain --language="man"
+kubectl cnf helps switch between current-contexts in multiple kubeconfigs
+
+Usage:
+  kubectl cnf [-h] [<string>]
+
+Flags:
+  -h, --help    show this message
+EOF
+  exit 0
+}
+
+### ensure that dependencies are installed
+# arg: none
+check_requirements() {
+  hash fzf bat || err "some dependencies are missing"
+}
+
+### show error message and exit
+# arg: $1 - text
+err() {
+  echo "🮲 error: $1" >&2
+  exit 1
+}
+
 main() {
-  local config
+  local kubeconfigs selected_kubeconfig
 
-  hash fzf bat || return 1
-  mkdir -p "${KCNF_DIR}"
+  check_requirements
+  [[ "$1" =~ ^(-h|--help)$ ]] && show_help
 
-  config=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} + \
-    | sort -k2 \
-    | fzf \
-      --cycle \
-      --height="${KCNF_HEIGHT}" \
-      --layout=reverse \
-      --with-nth=2 \
-      --query="${*:-}" \
-      --bind="tab:toggle-preview" \
-      --preview="bat --style=plain --color=always --language=yaml {1}" \
-      --preview-window="hidden,wrap,75%")
-  [[ -n "${config}" ]] || return 0
+  [[ -d "${KCNF_DIR}" ]] || err "directory does not exist: ${KCNF_DIR}"
+  kubeconfigs=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} +)
+  [[ -n "${kubeconfigs}" ]] || err "no valid kubeconfigs found in directory: ${KCNF_DIR}"
 
-  export KUBECONFIG="${config%% *}"
+  selected_kubeconfig=$(sort -k2 <<< "${kubeconfigs}" | fzf \
+    --height="${KCNF_HEIGHT}" \
+    --layout=reverse \
+    --with-nth=2 \
+    --query="${*:-}" \
+    --bind="tab:toggle-preview" \
+    --preview="bat --style=header --color=always --language=yaml {1}" \
+    --preview-window="hidden,wrap,75%")
 
-  if [[ "${KCNF_SUBSHELL}" != true ]]; then
+  export KUBECONFIG="${selected_kubeconfig%% *}"
+
+  if [[ "${KCNF_SUBSHELL}" != "true" ]]; then
     echo "export KUBECONFIG='${KUBECONFIG}'"
-    return 0
+    exit 0
   fi
 
-  export KUBECONTEXT="${config##* }"
+  export KUBECONTEXT="${selected_kubeconfig##* }"
 
-  [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇲ entered subshell with kubecontext: ${KUBECONTEXT}"
+  [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇲ entered subshell with context: ${KUBECONTEXT}"
 
   "${SHELL}"
 
-  [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇱ exited subshell with kubecontext: ${KUBECONTEXT}"
+  [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇱ exited subshell with context: ${KUBECONTEXT}"
+
+  exit 0
 }
 
 main "$@"
