@@ -20,6 +20,7 @@ spec:
         operator: In
         values:
         - linux
+        - darwin
     {{ addURIAndSha "https://github.com/hedgieinsocks/kubectl-cnf/archive/refs/tags/{{ .TagName }}.tar.gz" .TagName }}
     files:
     - from: kubectl-cnf-*/kubectl-cnf

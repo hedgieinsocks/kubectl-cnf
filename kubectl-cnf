@@ -3,7 +3,7 @@
 [[ -n "${DEBUG}" ]] && set -x
 set -eo pipefail
 
-KCNF_DIR="${KCNF_DIR:-$HOME/.kube/configs}"
+KCNF_DIR="${KCNF_DIR:-${HOME}/.kube/configs}"
 KCNF_VERBOSE="${KCNF_VERBOSE:-true}"
 KCNF_SUBSHELL="${KCNF_SUBSHELL:-true}"
 KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
