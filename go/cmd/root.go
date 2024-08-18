@@ -24,6 +24,7 @@ type Options struct {
 
 var (
 	opts        Options
+	previewCmd  string
 	kubeConfigs []string
 	wg          sync.WaitGroup
 )
@@ -46,6 +47,7 @@ func Execute() {
 
 func init() {
 	initConfig()
+	setPreviewCmd()
 	rootCmd.PersistentFlags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
 	rootCmd.PersistentFlags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
 	rootCmd.PersistentFlags().BoolVarP(&opts.NoShellFlag, "no-shell", "S", opts.NoShellFlag, "do not launch subshell")
@@ -63,6 +65,14 @@ func initConfig() {
 	opts.SelectionHeight = viper.GetString("height")
 	opts.NoShellFlag = viper.GetBool("no-shell")
 	opts.NoVerboseFlag = viper.GetBool("no-verbose")
+}
+
+func setPreviewCmd() {
+	if _, err := exec.LookPath("bat"); err != nil {
+		previewCmd = "cat"
+	} else {
+		previewCmd = "bat --style=plain --color=always --language=yaml"
+	}
 }
 
 func expandHomeDir(path string) string {
@@ -98,7 +108,7 @@ func getKubeConfigs(directory string) error {
 	return err
 }
 
-func launchSubShell(kubeconfig string, kubecontext string) {
+func launchSubShell(kubeconfig, kubecontext string) {
 	os.Setenv("KUBECONTEXT", kubecontext)
 	os.Setenv("KUBECONFIG", kubeconfig)
 	subShell := exec.Command(os.Getenv("SHELL"))
@@ -155,7 +165,7 @@ func selectKubeConfig(cmd *cobra.Command, args []string) {
 			"--query=" + query,
 			"--bind=tab:toggle-preview",
 			"--preview-window=hidden,wrap,75%",
-			"--preview=echo '# {2}' && kubectl config view --kubeconfig {2}",
+			"--preview=echo '# {2}' && kubectl config view --kubeconfig {2} | " + previewCmd,
 		},
 	)
 	if err != nil {
