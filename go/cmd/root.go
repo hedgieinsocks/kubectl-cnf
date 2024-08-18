@@ -15,12 +15,17 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Options struct {
+	KubeConfigDir   string
+	SelectionHeight string
+	NoShellFlag     bool
+	NoVerboseFlag   bool
+}
+
 var (
-	optKubeConfigDir   string
-	optSelectionHeight string
-	optNoShell         bool
-	optNoVerbose       bool
-	wg                 sync.WaitGroup
+	opts        Options
+	kubeConfigs []string
+	wg          sync.WaitGroup
 )
 
 var rootCmd = &cobra.Command{
@@ -34,35 +39,30 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
 func init() {
-	optKubeConfigDir = os.Getenv("KCNF_DIR")
-	if optKubeConfigDir == "" {
-		optKubeConfigDir = expandHomeDir("~/.kube/configs")
-	}
-	optSelectionHeight = os.Getenv("KCNF_HEIGHT")
-	if optSelectionHeight == "" {
-		optSelectionHeight = "40%"
-	}
-	if val := os.Getenv("KCNF_NO_SHELL"); val == "" {
-		optNoShell = false
-	} else {
-		optNoShell = true
-	}
-	if val := os.Getenv("KCNF_NO_VERBOSE"); val == "" {
-		optNoVerbose = false
-	} else {
-		optNoVerbose = true
-	}
-	rootCmd.PersistentFlags().StringVarP(&optKubeConfigDir, "directory", "d", optKubeConfigDir, "directory with kubeconfigs")
-	rootCmd.PersistentFlags().StringVarP(&optSelectionHeight, "height", "H", optSelectionHeight, "selection menu height")
-	rootCmd.PersistentFlags().BoolVarP(&optNoShell, "no-shell", "S", optNoShell, "do not launch subshell")
-	rootCmd.PersistentFlags().BoolVarP(&optNoVerbose, "no-verbose", "V", optNoVerbose, "supress subshell notifications")
+	initConfig()
+	rootCmd.PersistentFlags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
+	rootCmd.PersistentFlags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
+	rootCmd.PersistentFlags().BoolVarP(&opts.NoShellFlag, "no-shell", "S", opts.NoShellFlag, "do not launch subshell")
+	rootCmd.PersistentFlags().BoolVarP(&opts.NoVerboseFlag, "no-verbose", "V", opts.NoVerboseFlag, "supress subshell notifications")
+}
+
+func initConfig() {
+	viper.SetEnvPrefix("kcnf")
+	viper.AutomaticEnv()
+	replacer := strings.NewReplacer("-", "_")
+	viper.SetEnvKeyReplacer(replacer)
+	viper.SetDefault("dir", expandHomeDir("~/.kube/configs"))
+	viper.SetDefault("height", "40%")
+	opts.KubeConfigDir = viper.GetString("dir")
+	opts.SelectionHeight = viper.GetString("height")
+	opts.NoShellFlag = viper.GetBool("no-shell")
+	opts.NoVerboseFlag = viper.GetBool("no-verbose")
 }
 
 func expandHomeDir(path string) string {
@@ -75,17 +75,15 @@ func expandHomeDir(path string) string {
 
 func getCurrentContext(filename string) string {
 	viper.SetConfigFile(filename)
-	err := viper.ReadInConfig()
-	if err != nil {
+	if err := viper.ReadInConfig(); err != nil {
 		return ""
 	}
 	return viper.GetString("current-context")
 }
 
-func getKubeConfigs(kubeConfigDir string) ([]string, error) {
+func getKubeConfigs(directory string) error {
 	viper.SetConfigType("yaml")
-	var kubeConfigs []string
-	err := filepath.Walk(kubeConfigDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -97,7 +95,7 @@ func getKubeConfigs(kubeConfigDir string) ([]string, error) {
 		}
 		return nil
 	})
-	return kubeConfigs, err
+	return err
 }
 
 func launchSubShell(kubeconfig string, kubecontext string) {
@@ -107,11 +105,11 @@ func launchSubShell(kubeconfig string, kubecontext string) {
 	subShell.Stdin = os.Stdin
 	subShell.Stdout = os.Stdout
 	subShell.Stderr = os.Stderr
-	if !optNoVerbose {
+	if !opts.NoVerboseFlag {
 		fmt.Println("⇱ entered subshell with context: " + kubecontext)
 	}
 	subShell.Run()
-	if !optNoVerbose {
+	if !opts.NoVerboseFlag {
 		fmt.Println("⇱ exited subshell with context: " + kubecontext)
 	}
 }
@@ -119,8 +117,7 @@ func launchSubShell(kubeconfig string, kubecontext string) {
 func selectKubeConfig(cmd *cobra.Command, args []string) {
 	query := strings.Join(args, " ")
 
-	kubeConfigs, err := getKubeConfigs(optKubeConfigDir)
-	if err != nil {
+	if err := getKubeConfigs(opts.KubeConfigDir); err != nil {
 		log.Fatalf("Failed to get kubeconfigs: %v", err)
 	}
 	sort.Strings(kubeConfigs)
@@ -140,7 +137,7 @@ func selectKubeConfig(cmd *cobra.Command, args []string) {
 		for s := range outputChan {
 			selectedKubeConfig := strings.Split(s, "\t")
 			kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
-			if !optNoShell {
+			if !opts.NoShellFlag {
 				launchSubShell(kubeconfig, kubecontext)
 			} else {
 				fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
@@ -152,7 +149,7 @@ func selectKubeConfig(cmd *cobra.Command, args []string) {
 		true,
 		[]string{
 			"--layout=reverse",
-			"--height=" + optSelectionHeight,
+			"--height=" + opts.SelectionHeight,
 			"--delimiter=\t",
 			"--with-nth=1",
 			"--query=" + query,
