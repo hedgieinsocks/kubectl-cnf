@@ -22,8 +22,8 @@ You can export the following variables to tweak the plugin's behaviour.
 |-------------------|-------------------|---------------------------------------------------------------------|
 | `KCNF_DIR`        | `~/.kube/configs` | directory with your kubeconfigs                                     |
 | `KCNF_HEIGHT`     | `40%`             | height of the fzf selection menu                                    |
-| `KCNF_NO_VERBOSE` | ``                | be quiet when entering or exiting a subshell                        |
-| `KCNF_NO_SHELL`   | ``                | just print `export KUBECONFIG=PATH` instead of launching a subshell |
+| `KCNF_NO_VERBOSE` |                   | be quiet when entering or exiting a subshell                        |
+| `KCNF_NO_SHELL`   |                   | just print `export KUBECONFIG=PATH` instead of launching a subshell |
 
 ## Usage
 
