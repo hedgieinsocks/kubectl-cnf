@@ -18,12 +18,12 @@ If you are working with many clusters that come with their own kubeconfigs, you 
 
 You can export the following variables to tweak the plugin's behaviour.
 
-| VARIABLE        | DEFAULT           | DETAILS                                                  |
-|-----------------|-------------------|----------------------------------------------------------|
-| `KCNF_DIR`      | `~/.kube/configs` | directory with your kubeconfigs                          |
-| `KCNF_VERBOSE`  | `true`            | print a notificaiton when entering or exiting a subshell |
-| `KCNF_SUBSHELL` | `true`            | export `KUBECONFIG` and launch a subshell                |
-| `KCNF_HEIGHT`   | `40%`             | fzf height                                               |
+| VARIABLE          | DEFAULT           | DETAILS                                                             |
+|-------------------|-------------------|---------------------------------------------------------------------|
+| `KCNF_DIR`        | `~/.kube/configs` | directory with your kubeconfigs                                     |
+| `KCNF_HEIGHT`     | `40%`             | height of the fzf selection menu                                    |
+| `KCNF_NO_VERBOSE` | ``                | be quiet when entering or exiting a subshell                        |
+| `KCNF_NO_SHELL`   | ``                | just print `export KUBECONFIG=PATH` instead of launching a subshell |
 
 ## Usage
 

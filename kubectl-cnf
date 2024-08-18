@@ -4,8 +4,6 @@
 set -eo pipefail
 
 KCNF_DIR="${KCNF_DIR:-${HOME}/.kube/configs}"
-KCNF_VERBOSE="${KCNF_VERBOSE:-true}"
-KCNF_SUBSHELL="${KCNF_SUBSHELL:-true}"
 KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
 
 DEPENDENCIES=(fzf bat)
@@ -13,7 +11,7 @@ DEPENDENCIES=(fzf bat)
 ### show help message and exit
 # arg: none
 show_help() {
-  cat << EOF | bat --style=plain --language="man"
+  cat << EOF | bat --style=plain --language=man
 kubectl cnf helps switch between current-contexts in multiple kubeconfigs
 
 Usage:
@@ -70,18 +68,16 @@ main() {
 
   export KUBECONFIG="${selected_kubeconfig%% *}"
 
-  if [[ "${KCNF_SUBSHELL}" != "true" ]]; then
+  if [[ -n "${KCNF_NO_SHELL}" ]]; then
     echo "export KUBECONFIG='${KUBECONFIG}'"
     exit 0
   fi
 
   export KUBECONTEXT="${selected_kubeconfig##* }"
 
-  [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇲ entered subshell with context: ${KUBECONTEXT}"
-
+  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ entered subshell with context: ${KUBECONTEXT}"
   "${SHELL}"
-
-  [[ "${KCNF_VERBOSE}" == "true" ]] && echo "⇱ exited subshell with context: ${KUBECONTEXT}"
+  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ exited subshell with context: ${KUBECONTEXT}"
 
   exit 0
 }
