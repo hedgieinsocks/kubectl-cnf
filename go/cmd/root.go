@@ -36,7 +36,7 @@ var rootCmd = &cobra.Command{
 		cobra.CommandDisplayNameAnnotation: "kubectl cnf",
 	},
 	Version: "v0.1.0",
-	Run:     selectKubeConfig,
+	Run:     main,
 }
 
 func Execute() {
@@ -78,7 +78,7 @@ func setPreviewCmd() {
 func expandHomeDir(path string) string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatalf("Failed to expand homedir: %v", err)
+		log.Fatalf("Error: failed to expand homedir: %v", err)
 	}
 	return filepath.Join(homeDir, path[2:])
 }
@@ -108,6 +108,16 @@ func getKubeConfigs(directory string) error {
 	return err
 }
 
+func processSelection(selection string) {
+	selectedKubeConfig := strings.Split(selection, "\t")
+	kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
+	if !opts.NoShellFlag {
+		launchSubShell(kubeconfig, kubecontext)
+	} else {
+		fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
+	}
+}
+
 func launchSubShell(kubeconfig, kubecontext string) {
 	os.Setenv("KUBECONTEXT", kubecontext)
 	os.Setenv("KUBECONFIG", kubeconfig)
@@ -124,11 +134,11 @@ func launchSubShell(kubeconfig, kubecontext string) {
 	}
 }
 
-func selectKubeConfig(cmd *cobra.Command, args []string) {
+func main(cmd *cobra.Command, args []string) {
 	query := strings.Join(args, " ")
 
 	if err := getKubeConfigs(opts.KubeConfigDir); err != nil {
-		log.Fatalf("Failed to get kubeconfigs: %v", err)
+		log.Fatalf("Error: failed to get kubeconfigs: %v", err)
 	}
 	sort.Strings(kubeConfigs)
 
@@ -145,13 +155,7 @@ func selectKubeConfig(cmd *cobra.Command, args []string) {
 		wg.Add(1)
 		defer wg.Done()
 		for s := range outputChan {
-			selectedKubeConfig := strings.Split(s, "\t")
-			kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
-			if !opts.NoShellFlag {
-				launchSubShell(kubeconfig, kubecontext)
-			} else {
-				fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
-			}
+			processSelection(s)
 		}
 	}()
 
@@ -169,13 +173,15 @@ func selectKubeConfig(cmd *cobra.Command, args []string) {
 		},
 	)
 	if err != nil {
-		log.Fatalf("Failed to parse fzf options: %v", err)
+		log.Fatalf("Error: failed to parse fzf options: %v", err)
 	}
 
 	options.Input = inputChan
 	options.Output = outputChan
 
-	fzf.Run(options)
+	if _, err := fzf.Run(options); err != nil {
+		log.Fatalf("Error: failed to run fzf: %v", err)
+	}
 
 	close(outputChan)
 	wg.Wait()
