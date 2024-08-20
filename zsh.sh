@@ -13,7 +13,7 @@ kcnf() {
   local selected_kubeconfig
 
   selected_kubeconfig=$(find ~/.kube/configs \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} + \
-    | sort -k2 \
+    | sort --key=2 \
     | fzf \
       --height="40%" \
       --layout=reverse \

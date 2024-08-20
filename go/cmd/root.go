@@ -128,9 +128,9 @@ func copyToClipboard(kubeconfig string) {
 	var clipBin string
 	var clipArg []string
 	platform := runtime.GOOS
-	session := getenv.String("XDG_SESSION_TYPE", "x11")
 	switch platform {
 	case "linux":
+		session := getenv.String("XDG_SESSION_TYPE", "x11")
 		switch session {
 		case "x11":
 			clipBin = "xsel"

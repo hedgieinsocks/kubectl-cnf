@@ -24,6 +24,10 @@ Dependencies:
   fzf - https://github.com/junegunn/fzf
   bat - https://github.com/sharkdp/bat
 
+  xsel (Linux x11 clipboard) - https://github.com/kfish/xsel
+  wl-copy (Linux Wayland clipboard) - https://github.com/bugaevc/wl-clipboard
+  pbcopy (Darwin clipboard)
+
 Prerequisites:
   directory '${KCNF_DIR}' populated with kubeconfig files
 EOF
@@ -36,7 +40,7 @@ check_requirements() {
   local dep
 
   for dep in "${DEPENDENCIES[@]}"; do
-    hash "${dep}" 2>/dev/null || err "missing dependency: ${dep}"
+    hash "${dep}" 2>/dev/null || err "missing core dependency: ${dep}"
   done
 }
 
@@ -45,6 +49,27 @@ check_requirements() {
 err() {
   echo "🮲 error: $1" >&2
   exit 1
+}
+
+copy_to_clipboard() {
+  local platform clipboard_bin clipboard_arg
+
+  platform=$(uname)
+  case "${platform}" in
+    Linux)  case "${XDG_SESSION_TYPE:-x11}" in
+              x11)     clipboard_bin="xsel"; clipboard_arg="--clipboard --trim"              ;;
+              wayland) clipboard_bin="wl-copy"; clipboard_arg="--trim-newline"               ;;
+              *)       err "clipboard copy is not supported on session: ${XDG_SESSION_TYPE}" ;;
+            esac
+            ;;
+    Darwin) clipboard_bin="pbcopy"
+            ;;
+    *)      err "clipboard copy is not supported on platform: ${platform}"
+            ;;
+  esac
+
+  hash "${clipboard_bin}" 2>/dev/null || err "missing clipboard dependency: ${clipboard_bin}"
+  echo "export KUBECONFIG='${KUBECONFIG}'" | "${clipboard_bin}" ${clipboard_arg}
 }
 
 main() {
@@ -57,7 +82,7 @@ main() {
   kubeconfigs=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} +)
   [[ -n "${kubeconfigs}" ]] || err "no valid kubeconfigs found in directory: ${KCNF_DIR}"
 
-  selected_kubeconfig=$(sort -k2 <<< "${kubeconfigs}" | fzf \
+  selected_kubeconfig=$(sort --key=2 <<< "${kubeconfigs}" | fzf \
     --height="${KCNF_HEIGHT}" \
     --layout=reverse \
     --with-nth=2 \
@@ -67,18 +92,20 @@ main() {
     --preview-window="hidden,wrap,75%")
 
   export KUBECONFIG="${selected_kubeconfig%% *}"
-
-  if [[ -n "${KCNF_NO_SHELL}" ]]; then
-    echo "export KUBECONFIG='${KUBECONFIG}'"
-    exit 0
-  fi
-
   export KUBECONTEXT="${selected_kubeconfig##* }"
 
-  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
-  "${SHELL}"
-  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
-
+  if [[ -n "${KCNF_NO_SHELL}" ]]; then
+    [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⮺ ${KUBECONTEXT}"
+    if [[ -n "${KCNF_COPY_CLIP}" ]]; then
+      copy_to_clipboard
+    else
+      echo "export KUBECONFIG='${KUBECONFIG}'"
+    fi
+  else
+    [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
+    "${SHELL}"
+    [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
+  fi
   exit 0
 }
 
