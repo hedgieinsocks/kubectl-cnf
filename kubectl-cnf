@@ -26,7 +26,6 @@ Dependencies:
 
   xsel (Linux x11 clipboard) - https://github.com/kfish/xsel
   wl-copy (Linux Wayland clipboard) - https://github.com/bugaevc/wl-clipboard
-  pbcopy (Darwin clipboard)
 
 Prerequisites:
   directory '${KCNF_DIR}' populated with kubeconfig files
