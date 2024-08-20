@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	fzf "github.com/junegunn/fzf/src"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/tiagomelo/go-clipboard/clipboard"
 )
 
 type Options struct {
@@ -125,34 +125,8 @@ func launchSubShell(kubeconfig, kubecontext string) {
 }
 
 func copyToClipboard(kubeconfig string) {
-	var clipBin string
-	var clipArg []string
-	platform := runtime.GOOS
-	switch platform {
-	case "linux":
-		session := getenv.String("XDG_SESSION_TYPE", "x11")
-		switch session {
-		case "x11":
-			clipBin = "xsel"
-			clipArg = []string{"--input", "--clipboard", "--trim"}
-		case "wayland":
-			clipBin = "wl-copy"
-			clipArg = []string{"--trim-newline"}
-		default:
-			log.Fatalf("Error: clipboard copy is not supported on this session: %s", session)
-		}
-	case "darwin":
-		clipBin = "pbcopy"
-		clipArg = []string{}
-	default:
-		log.Fatalf("Error: clipboard copy is not supported on this platform: %s", platform)
-	}
-	if _, err := exec.LookPath(clipBin); err != nil {
-		log.Fatalf("Error: failed to locate clipboard binary: %v", err)
-	}
-	clipCopy := exec.Command(clipBin, clipArg...)
-	clipCopy.Stdin = strings.NewReader("export KUBECONFIG='" + kubeconfig + "'")
-	if err := clipCopy.Run(); err != nil {
+	clipBoard := clipboard.New()
+	if err := clipBoard.CopyText("export KUBECONFIG='" + kubeconfig + "'"); err != nil {
 		log.Fatalf("Error: failed to copy data to clipboard: %v", err)
 	}
 }
@@ -160,17 +134,17 @@ func copyToClipboard(kubeconfig string) {
 func processSelection(selection string) {
 	selectedKubeConfig := strings.Split(selection, "\t")
 	kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
-	if !opts.NoShellFlag {
-		launchSubShell(kubeconfig, kubecontext)
-	} else {
+	if opts.NoShellFlag {
 		if !opts.NoVerboseFlag {
 			fmt.Println("⮺ " + kubecontext)
 		}
-		if !opts.copyClipFlag {
-			fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
-		} else {
+		if opts.copyClipFlag {
 			copyToClipboard(kubeconfig)
+		} else {
+			fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
 		}
+	} else {
+		launchSubShell(kubeconfig, kubecontext)
 	}
 }
 

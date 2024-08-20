@@ -4,7 +4,7 @@ _set_kubectx_title() {
   if [[ -n "${KUBECONFIG}" ]]; then
     export DISABLE_AUTO_TITLE="true"
     # oh-my-zsh https://github.com/ohmyzsh/ohmyzsh/blob/master/lib/termsupport.zsh#L9
-    title "☸ ${KUBECONTEXT}"
+    title "☸ ${KUBECONTEXT}" # title "☸ $(kubectl config current-context)"
   fi
 }
 precmd_functions+=(_set_kubectx_title)
