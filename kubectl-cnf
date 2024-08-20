@@ -75,9 +75,9 @@ main() {
 
   export KUBECONTEXT="${selected_kubeconfig##* }"
 
-  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ entered subshell with context: ${KUBECONTEXT}"
+  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
   "${SHELL}"
-  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ exited subshell with context: ${KUBECONTEXT}"
+  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
 
   exit 0
 }

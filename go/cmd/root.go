@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/josestg/getenv"
 	fzf "github.com/junegunn/fzf/src"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -18,8 +20,9 @@ import (
 type Options struct {
 	KubeConfigDir   string
 	SelectionHeight string
-	NoShellFlag     bool
 	NoVerboseFlag   bool
+	NoShellFlag     bool
+	copyClipFlag    bool
 }
 
 var (
@@ -48,23 +51,20 @@ func Execute() {
 func init() {
 	initConfig()
 	setPreviewCmd()
-	rootCmd.PersistentFlags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
-	rootCmd.PersistentFlags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
-	rootCmd.PersistentFlags().BoolVarP(&opts.NoShellFlag, "no-shell", "S", opts.NoShellFlag, "do not launch subshell")
-	rootCmd.PersistentFlags().BoolVarP(&opts.NoVerboseFlag, "no-verbose", "V", opts.NoVerboseFlag, "supress subshell notifications")
+	rootCmd.Flags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
+	rootCmd.Flags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
+	rootCmd.Flags().BoolVarP(&opts.NoVerboseFlag, "no-verbose", "V", opts.NoVerboseFlag, "do not print auxiliary messages")
+	rootCmd.Flags().BoolVarP(&opts.NoShellFlag, "no-shell", "S", opts.NoShellFlag, "do not launch a subshell, instead print 'export KUBECONFIG=PATH' to stdout")
+	rootCmd.Flags().BoolVarP(&opts.copyClipFlag, "clip", "c", opts.copyClipFlag, "when --no-shell is provided, copy 'export KUBECONFIG=PATH' to clipboard instead of printing to stdout")
+	rootCmd.Flags().SortFlags = false
 }
 
 func initConfig() {
-	viper.SetEnvPrefix("kcnf")
-	viper.AutomaticEnv()
-	replacer := strings.NewReplacer("-", "_")
-	viper.SetEnvKeyReplacer(replacer)
-	viper.SetDefault("dir", expandHomeDir("~/.kube/configs"))
-	viper.SetDefault("height", "40%")
-	opts.KubeConfigDir = viper.GetString("dir")
-	opts.SelectionHeight = viper.GetString("height")
-	opts.NoShellFlag = viper.GetBool("no-shell")
-	opts.NoVerboseFlag = viper.GetBool("no-verbose")
+	opts.KubeConfigDir = getenv.String("KCNF_DIR", expandHomeDir("~/.kube/configs"))
+	opts.SelectionHeight = getenv.String("KCNF_DIR_HEIGHT", "40%")
+	opts.NoVerboseFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
+	opts.NoShellFlag = getenv.Bool("KCNF_NO_SHELL", false)
+	opts.copyClipFlag = getenv.Bool("KCNF_COPY_CLIP", false)
 }
 
 func setPreviewCmd() {
@@ -93,7 +93,7 @@ func getCurrentContext(filename string) string {
 
 func getKubeConfigs(directory string) error {
 	viper.SetConfigType("yaml")
-	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -108,16 +108,6 @@ func getKubeConfigs(directory string) error {
 	return err
 }
 
-func processSelection(selection string) {
-	selectedKubeConfig := strings.Split(selection, "\t")
-	kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
-	if !opts.NoShellFlag {
-		launchSubShell(kubeconfig, kubecontext)
-	} else {
-		fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
-	}
-}
-
 func launchSubShell(kubeconfig, kubecontext string) {
 	os.Setenv("KUBECONTEXT", kubecontext)
 	os.Setenv("KUBECONFIG", kubeconfig)
@@ -126,11 +116,61 @@ func launchSubShell(kubeconfig, kubecontext string) {
 	subShell.Stdout = os.Stdout
 	subShell.Stderr = os.Stderr
 	if !opts.NoVerboseFlag {
-		fmt.Println("⇱ entered subshell with context: " + kubecontext)
+		fmt.Println("⇲ " + kubecontext)
 	}
 	subShell.Run()
 	if !opts.NoVerboseFlag {
-		fmt.Println("⇱ exited subshell with context: " + kubecontext)
+		fmt.Println("⇱ " + kubecontext)
+	}
+}
+
+func copyToClipboard(kubeconfig string) {
+	var clipBin string
+	var clipArg []string
+	platform := runtime.GOOS
+	session := getenv.String("XDG_SESSION_TYPE", "x11")
+	switch platform {
+	case "linux":
+		switch session {
+		case "x11":
+			clipBin = "xsel"
+			clipArg = []string{"--input", "--clipboard", "--trim"}
+		case "wayland":
+			clipBin = "wl-copy"
+			clipArg = []string{"--trim-newline"}
+		default:
+			log.Fatalf("Error: clipboard copy is not supported on this session: %s", session)
+		}
+	case "darwin":
+		clipBin = "pbcopy"
+		clipArg = []string{}
+	default:
+		log.Fatalf("Error: clipboard copy is not supported on this platform: %s", platform)
+	}
+	if _, err := exec.LookPath(clipBin); err != nil {
+		log.Fatalf("Error: failed to locate clipboard binary: %v", err)
+	}
+	clipCopy := exec.Command(clipBin, clipArg...)
+	clipCopy.Stdin = strings.NewReader("export KUBECONFIG='" + kubeconfig + "'")
+	if err := clipCopy.Run(); err != nil {
+		log.Fatalf("Error: failed to copy data to clipboard: %v", err)
+	}
+}
+
+func processSelection(selection string) {
+	selectedKubeConfig := strings.Split(selection, "\t")
+	kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
+	if !opts.NoShellFlag {
+		launchSubShell(kubeconfig, kubecontext)
+	} else {
+		if !opts.NoVerboseFlag {
+			fmt.Println("⮺ " + kubecontext)
+		}
+		if !opts.copyClipFlag {
+			fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
+		} else {
+			copyToClipboard(kubeconfig)
+		}
 	}
 }
 
@@ -180,7 +220,7 @@ func main(cmd *cobra.Command, args []string) {
 	options.Output = outputChan
 
 	if _, err := fzf.Run(options); err != nil {
-		log.Fatalf("Error: failed to run fzf: %v", err)
+		log.Fatalf("Error: failed to run fzf selection: %v", err)
 	}
 
 	close(outputChan)
