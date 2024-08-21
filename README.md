@@ -50,9 +50,6 @@ Dependencies:
   fzf - https://github.com/junegunn/fzf
   bat - https://github.com/sharkdp/bat
 
-  xsel (Linux x11 clipboard) - https://github.com/kfish/xsel
-  wl-copy (Linux Wayland clipboard) - https://github.com/bugaevc/wl-clipboard
-
 Prerequisites:
   directory '/home/user/.kube/configs' populated with kubeconfig files
 ```

@@ -24,9 +24,6 @@ Dependencies:
   fzf - https://github.com/junegunn/fzf
   bat - https://github.com/sharkdp/bat
 
-  xsel (Linux x11 clipboard) - https://github.com/kfish/xsel
-  wl-copy (Linux Wayland clipboard) - https://github.com/bugaevc/wl-clipboard
-
 Prerequisites:
   directory '${KCNF_DIR}' populated with kubeconfig files
 EOF
@@ -50,25 +47,27 @@ err() {
   exit 1
 }
 
+### copy kubeconfig export command to clipboard
+# arg: none
 copy_to_clipboard() {
-  local platform clipboard_bin clipboard_arg
+  local platform clipboard_cmd
 
   platform=$(uname)
   case "${platform}" in
     Linux)  case "${XDG_SESSION_TYPE:-x11}" in
-              x11)     clipboard_bin="xsel"; clipboard_arg="--clipboard --trim"              ;;
-              wayland) clipboard_bin="wl-copy"; clipboard_arg="--trim-newline"               ;;
+              x11)     clipboard_cmd=("xsel" "--clipboard")                                  ;;
+              wayland) clipboard_cmd=("wl-copy")                                             ;;
               *)       err "clipboard copy is not supported on session: ${XDG_SESSION_TYPE}" ;;
             esac
             ;;
-    Darwin) clipboard_bin="pbcopy"
+    Darwin) clipboard_cmd=("pbcopy")
             ;;
     *)      err "clipboard copy is not supported on platform: ${platform}"
             ;;
   esac
 
-  hash "${clipboard_bin}" 2>/dev/null || err "missing clipboard dependency: ${clipboard_bin}"
-  echo "export KUBECONFIG='${KUBECONFIG}'" | "${clipboard_bin}" ${clipboard_arg}
+  hash "${clipboard_cmd[0]}" 2>/dev/null || err "missing clipboard dependency: ${clipboard_cmd[0]}"
+  echo -n "${EXPORT_COMMAND}" | "${clipboard_cmd[@]}"
 }
 
 main() {
@@ -94,17 +93,19 @@ main() {
   export KUBECONTEXT="${selected_kubeconfig##* }"
 
   if [[ -n "${KCNF_NO_SHELL}" ]]; then
+    EXPORT_COMMAND="export KUBECONFIG='${KUBECONFIG}'"
     [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⮺ ${KUBECONTEXT}"
     if [[ -n "${KCNF_COPY_CLIP}" ]]; then
       copy_to_clipboard
     else
-      echo "export KUBECONFIG='${KUBECONFIG}'"
+      echo "${EXPORT_COMMAND}"
     fi
   else
     [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
     "${SHELL}"
     [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
   fi
+
   exit 0
 }
 
