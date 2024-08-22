@@ -25,12 +25,7 @@ type Options struct {
 	copyClipFlag    bool
 }
 
-var (
-	opts        Options
-	previewCmd  string
-	kubeConfigs []string
-	wg          sync.WaitGroup
-)
+var opts Options
 
 var rootCmd = &cobra.Command{
 	Use:  "kubectl-cnf",
@@ -50,7 +45,6 @@ func Execute() {
 
 func init() {
 	initConfig()
-	setPreviewCmd()
 	rootCmd.Flags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
 	rootCmd.Flags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
 	rootCmd.Flags().BoolVarP(&opts.NoVerboseFlag, "no-verbose", "V", opts.NoVerboseFlag, "do not print auxiliary messages")
@@ -67,14 +61,6 @@ func initConfig() {
 	opts.copyClipFlag = getenv.Bool("KCNF_COPY_CLIP", false)
 }
 
-func setPreviewCmd() {
-	if _, err := exec.LookPath("bat"); err != nil {
-		previewCmd = "cat"
-	} else {
-		previewCmd = "bat --style=plain --color=always --language=yaml"
-	}
-}
-
 func expandHomeDir(path string) string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -83,29 +69,36 @@ func expandHomeDir(path string) string {
 	return filepath.Join(homeDir, path[2:])
 }
 
-func getCurrentContext(filename string) string {
-	viper.SetConfigFile(filename)
+func getCurrentContext(file string) string {
+	viper.SetConfigFile(file)
 	if err := viper.ReadInConfig(); err != nil {
 		return ""
 	}
 	return viper.GetString("current-context")
 }
 
-func getKubeConfigs(directory string) error {
+func getKubeConfigs(directory string) ([]string, error) {
+	var kubeConfigs []string
 	viper.SetConfigType("yaml")
 	err := filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
-			currentContext := getCurrentContext(path)
-			if currentContext != "" {
+			if currentContext := getCurrentContext(path); currentContext != "" {
 				kubeConfigs = append(kubeConfigs, currentContext+"\t"+path)
 			}
 		}
 		return nil
 	})
-	return err
+	return kubeConfigs, err
+}
+
+func getPreviewCmd() string {
+	if _, err := exec.LookPath("bat"); err != nil {
+		return "cat"
+	}
+	return "bat --style=plain --color=always --language=yaml"
 }
 
 func launchSubShell(kubeconfig, kubecontext string) {
@@ -149,9 +142,10 @@ func processSelection(selection string) {
 }
 
 func main(cmd *cobra.Command, args []string) {
-	query := strings.Join(args, " ")
+	var wg sync.WaitGroup
 
-	if err := getKubeConfigs(opts.KubeConfigDir); err != nil {
+	kubeConfigs, err := getKubeConfigs(opts.KubeConfigDir)
+	if err != nil {
 		log.Fatalf("Error: failed to get kubeconfigs: %v", err)
 	}
 	sort.Strings(kubeConfigs)
@@ -165,14 +159,16 @@ func main(cmd *cobra.Command, args []string) {
 	}()
 
 	outputChan := make(chan string, 1)
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		for s := range outputChan {
 			processSelection(s)
 		}
 	}()
 
+	query := strings.Join(args, " ")
+	previewCmd := getPreviewCmd()
 	options, err := fzf.ParseOptions(
 		true,
 		[]string{
