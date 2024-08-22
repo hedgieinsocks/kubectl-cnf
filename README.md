@@ -4,6 +4,10 @@
 
 If you are working with many clusters that come with their own kubeconfigs, you can use this tool to allow yourself multitask by keeping a dedicated terminal tab for each cluster.
 
+By default, the plugin launches a subshell for the chosen kubeconfig. But you can tweak the plugin to just print `export KUBECONFIG=PATH` command or copy it to the clipboard instead.
+
+![kubectl-cnf demo GIF](img/demo-1.gif)
+
 ## Dependencies
 
 ### Required
