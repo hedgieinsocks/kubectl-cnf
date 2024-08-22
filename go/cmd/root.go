@@ -44,7 +44,9 @@ func Execute() {
 }
 
 func init() {
-	initConfig()
+	log.SetFlags(0)
+	log.SetPrefix("error: ")
+	setOpts()
 	rootCmd.Flags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
 	rootCmd.Flags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
 	rootCmd.Flags().BoolVarP(&opts.NoVerboseFlag, "no-verbose", "V", opts.NoVerboseFlag, "do not print auxiliary messages")
@@ -53,7 +55,7 @@ func init() {
 	rootCmd.Flags().SortFlags = false
 }
 
-func initConfig() {
+func setOpts() {
 	opts.KubeConfigDir = getenv.String("KCNF_DIR", expandHomeDir("~/.kube/configs"))
 	opts.SelectionHeight = getenv.String("KCNF_DIR_HEIGHT", "40%")
 	opts.NoVerboseFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
@@ -64,7 +66,7 @@ func initConfig() {
 func expandHomeDir(path string) string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatalf("Error: failed to expand homedir: %v", err)
+		log.Fatalf("failed to expand homedir: %v", err)
 	}
 	return filepath.Join(homeDir, path[2:])
 }
@@ -120,7 +122,7 @@ func launchSubShell(kubeconfig, kubecontext string) {
 func copyToClipboard(kubeconfig string) {
 	clipBoard := clipboard.New()
 	if err := clipBoard.CopyText("export KUBECONFIG='" + kubeconfig + "'"); err != nil {
-		log.Fatalf("Error: failed to copy data to clipboard: %v", err)
+		log.Fatalf("failed to copy data to clipboard: %v", err)
 	}
 }
 
@@ -146,7 +148,10 @@ func main(cmd *cobra.Command, args []string) {
 
 	kubeConfigs, err := getKubeConfigs(opts.KubeConfigDir)
 	if err != nil {
-		log.Fatalf("Error: failed to get kubeconfigs: %v", err)
+		log.Fatalf("failed to parse kubeconfigs: %v", err)
+	}
+	if kubeConfigs == nil {
+		log.Fatalf("no valid kubeconfigs found in: %s", opts.KubeConfigDir)
 	}
 	sort.Strings(kubeConfigs)
 
@@ -183,14 +188,14 @@ func main(cmd *cobra.Command, args []string) {
 		},
 	)
 	if err != nil {
-		log.Fatalf("Error: failed to parse fzf options: %v", err)
+		log.Fatalf("failed to parse fzf options: %v", err)
 	}
 
 	options.Input = inputChan
 	options.Output = outputChan
 
 	if _, err := fzf.Run(options); err != nil {
-		log.Fatalf("Error: failed to run fzf selection: %v", err)
+		log.Fatalf("failed to run fzf selection: %v", err)
 	}
 
 	close(outputChan)
