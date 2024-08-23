@@ -184,7 +184,7 @@ func main(cmd *cobra.Command, args []string) {
 			"--query=" + query,
 			"--bind=tab:toggle-preview",
 			"--preview-window=hidden,wrap,75%",
-			"--preview={echo '# {2}'; kubectl config view --kubeconfig {2};} | " + previewCmd,
+			"--preview={ echo '# {2}'; kubectl config view --kubeconfig {2}; } | " + previewCmd,
 		},
 	)
 	if err != nil {

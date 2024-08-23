@@ -86,7 +86,7 @@ main() {
     --with-nth=2 \
     --query="${*:-}" \
     --bind="tab:toggle-preview" \
-    --preview="bat --style=header --color=always --language=yaml {1}" \
+    --preview="{ echo '# {1}'; kubectl config view --kubeconfig {1}; } | bat --style=plain --color=always --language=yaml" \
     --preview-window="hidden,wrap,75%")
 
   export KUBECONFIG="${selected_kubeconfig%% *}"
