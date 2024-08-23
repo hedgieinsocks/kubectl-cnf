@@ -33,7 +33,7 @@ var rootCmd = &cobra.Command{
 	Annotations: map[string]string{
 		cobra.CommandDisplayNameAnnotation: "kubectl cnf",
 	},
-	Version: "v0.1.0",
+	Version: "v0.0.6",
 	Run:     main,
 }
 
@@ -71,6 +71,20 @@ func expandHomeDir(path string) string {
 	return filepath.Join(homeDir, path[2:])
 }
 
+func copyToClipboard(text string) {
+	clipBoard := clipboard.New()
+	if err := clipBoard.CopyText(text); err != nil {
+		log.Fatalf("failed to copy data to clipboard: %v", err)
+	}
+}
+
+func getPreviewCmd() string {
+	if _, err := exec.LookPath("bat"); err != nil {
+		return "cat"
+	}
+	return "bat --style=plain --color=always --language=yaml"
+}
+
 func getCurrentContext(file string) string {
 	viper.SetConfigFile(file)
 	if err := viper.ReadInConfig(); err != nil {
@@ -96,50 +110,37 @@ func getKubeConfigs(directory string) ([]string, error) {
 	return kubeConfigs, err
 }
 
-func getPreviewCmd() string {
-	if _, err := exec.LookPath("bat"); err != nil {
-		return "cat"
-	}
-	return "bat --style=plain --color=always --language=yaml"
-}
-
-func launchSubShell(kubeconfig, kubecontext string) {
-	os.Setenv("KUBECONTEXT", kubecontext)
-	os.Setenv("KUBECONFIG", kubeconfig)
+func launchSubShell(kubeConfig, kubeContext string) {
+	os.Setenv("KUBECONTEXT", kubeContext)
+	os.Setenv("KUBECONFIG", kubeConfig)
 	subShell := exec.Command(os.Getenv("SHELL"))
 	subShell.Stdin = os.Stdin
 	subShell.Stdout = os.Stdout
 	subShell.Stderr = os.Stderr
 	if !opts.NoVerboseFlag {
-		fmt.Println("⇲ " + kubecontext)
+		fmt.Println("⇲ " + kubeContext)
 	}
 	subShell.Run()
 	if !opts.NoVerboseFlag {
-		fmt.Println("⇱ " + kubecontext)
-	}
-}
-
-func copyToClipboard(kubeconfig string) {
-	clipBoard := clipboard.New()
-	if err := clipBoard.CopyText("export KUBECONFIG='" + kubeconfig + "'"); err != nil {
-		log.Fatalf("failed to copy data to clipboard: %v", err)
+		fmt.Println("⇱ " + kubeContext)
 	}
 }
 
 func processSelection(selection string) {
 	selectedKubeConfig := strings.Split(selection, "\t")
-	kubecontext, kubeconfig := selectedKubeConfig[0], selectedKubeConfig[1]
+	kubeContext, kubeConfig := selectedKubeConfig[0], selectedKubeConfig[1]
 	if opts.NoShellFlag {
 		if !opts.NoVerboseFlag {
-			fmt.Println("⮺ " + kubecontext)
+			fmt.Println("⮺ " + kubeContext)
 		}
+		exportCmd := "export KUBECONFIG='" + kubeConfig + "'"
 		if opts.copyClipFlag {
-			copyToClipboard(kubeconfig)
+			copyToClipboard(exportCmd)
 		} else {
-			fmt.Println("export KUBECONFIG='" + kubeconfig + "'")
+			fmt.Println(exportCmd)
 		}
 	} else {
-		launchSubShell(kubeconfig, kubecontext)
+		launchSubShell(kubeConfig, kubeContext)
 	}
 }
 
@@ -174,7 +175,7 @@ func main(cmd *cobra.Command, args []string) {
 
 	query := strings.Join(args, " ")
 	previewCmd := getPreviewCmd()
-	options, err := fzf.ParseOptions(
+	fzfOptions, err := fzf.ParseOptions(
 		true,
 		[]string{
 			"--layout=reverse",
@@ -191,10 +192,10 @@ func main(cmd *cobra.Command, args []string) {
 		log.Fatalf("failed to parse fzf options: %v", err)
 	}
 
-	options.Input = inputChan
-	options.Output = outputChan
+	fzfOptions.Input = inputChan
+	fzfOptions.Output = outputChan
 
-	if _, err := fzf.Run(options); err != nil {
+	if _, err := fzf.Run(fzfOptions); err != nil {
 		log.Fatalf("failed to run fzf selection: %v", err)
 	}
 
