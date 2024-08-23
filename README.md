@@ -25,7 +25,7 @@ By default, the plugin launches a subshell for the chosen kubeconfig. But you ca
 1. Run `kubectl krew install cnf` or just place `kubectl-cnf` into the directory within your `PATH` (e.g. `~/.local/bin`)
 2. Create the `~/.kube/configs` directory and place your kubeconfigs there (or create symlinks)
 
-Alternatively, you can build a `go` [version](https://github.com/hedgieinsocks/kubectl-cnf/tree/main/go) of the plugin.
+The krew verion is a simple bash script, but you can grab a `go` [version](https://github.com/hedgieinsocks/kubectl-cnf/tree/main/go) of the plugin from the [releases](https://github.com/hedgieinsocks/kubectl-cnf/releases) page.
 
 ## Customization
 

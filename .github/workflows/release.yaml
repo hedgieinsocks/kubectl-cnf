@@ -3,15 +3,28 @@ name: release
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
-
   release:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./go
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v3
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+      - run: |
+          go get .
+      - run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o kubectl-cnf_linux_amd64
+      - run: |
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o kubectl-cnf_darwin_arm64
       - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "go/kubectl-cnf*"
       - uses: rajatjindal/krew-release-bot@v0.0.46
