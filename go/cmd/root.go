@@ -17,15 +17,15 @@ import (
 	"github.com/tiagomelo/go-clipboard/clipboard"
 )
 
-type Options struct {
-	KubeConfigDir   string
-	SelectionHeight string
-	NoVerboseFlag   bool
-	NoShellFlag     bool
+type options struct {
+	kubeconfigsDir  string
+	selectionHeight string
+	noVerboseFlag   bool
+	noShellFlag     bool
 	copyClipFlag    bool
 }
 
-var opts Options
+var opts options
 
 var rootCmd = &cobra.Command{
 	Use:  "kubectl-cnf",
@@ -45,36 +45,36 @@ func Execute() {
 
 func init() {
 	log.SetFlags(0)
-	log.SetPrefix("error: ")
+	log.SetPrefix("Error: ")
 	setOpts()
-	rootCmd.Flags().StringVarP(&opts.KubeConfigDir, "dir", "d", opts.KubeConfigDir, "directory with kubeconfigs")
-	rootCmd.Flags().StringVarP(&opts.SelectionHeight, "height", "H", opts.SelectionHeight, "selection menu height")
-	rootCmd.Flags().BoolVarP(&opts.NoVerboseFlag, "no-verbose", "V", opts.NoVerboseFlag, "do not print auxiliary messages")
-	rootCmd.Flags().BoolVarP(&opts.NoShellFlag, "no-shell", "S", opts.NoShellFlag, "do not launch a subshell, instead print 'export KUBECONFIG=PATH' to stdout")
-	rootCmd.Flags().BoolVarP(&opts.copyClipFlag, "clip", "c", opts.copyClipFlag, "when --no-shell is provided, copy 'export KUBECONFIG=PATH' to clipboard instead of printing to stdout")
+	rootCmd.Flags().StringVarP(&opts.kubeconfigsDir, "directory", "d", opts.kubeconfigsDir, "directory with kubeconfigs")
+	rootCmd.Flags().StringVarP(&opts.selectionHeight, "height", "H", opts.selectionHeight, "selection menu height")
+	rootCmd.Flags().BoolVarP(&opts.noVerboseFlag, "no-verbose", "V", opts.noVerboseFlag, "do not print auxiliary messages")
+	rootCmd.Flags().BoolVarP(&opts.noShellFlag, "no-shell", "S", opts.noShellFlag, "do not launch a subshell, instead print 'export KUBECONFIG=PATH' to stdout")
+	rootCmd.Flags().BoolVarP(&opts.copyClipFlag, "clipboard", "c", opts.copyClipFlag, "when --no-shell is provided, copy 'export KUBECONFIG=PATH' to clipboard instead of printing to stdout")
 	rootCmd.Flags().SortFlags = false
 }
 
 func setOpts() {
-	opts.KubeConfigDir = getenv.String("KCNF_DIR", expandHomeDir("~/.kube/configs"))
-	opts.SelectionHeight = getenv.String("KCNF_DIR_HEIGHT", "40%")
-	opts.NoVerboseFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
-	opts.NoShellFlag = getenv.Bool("KCNF_NO_SHELL", false)
+	opts.kubeconfigsDir = getenv.String("KCNF_DIR", getKubeconfigsDir())
+	opts.selectionHeight = getenv.String("KCNF_DIR_HEIGHT", "40%")
+	opts.noVerboseFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
+	opts.noShellFlag = getenv.Bool("KCNF_NO_SHELL", false)
 	opts.copyClipFlag = getenv.Bool("KCNF_COPY_CLIP", false)
 }
 
-func expandHomeDir(path string) string {
-	homeDir, err := os.UserHomeDir()
+func getKubeconfigsDir() string {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatalf("failed to expand homedir: %v", err)
+		log.Fatalf("failed to get homedir: %v", err)
 	}
-	return filepath.Join(homeDir, path[2:])
+	return filepath.Join(home, ".kube", "configs")
 }
 
 func copyToClipboard(text string) {
-	clipBoard := clipboard.New()
-	if err := clipBoard.CopyText(text); err != nil {
-		log.Fatalf("failed to copy data to clipboard: %v", err)
+	cb := clipboard.New()
+	if err := cb.CopyText(text); err != nil {
+		log.Fatalf("failed to copy text to clipboard: %v", err)
 	}
 }
 
@@ -93,8 +93,8 @@ func getCurrentContext(file string) string {
 	return viper.GetString("current-context")
 }
 
-func getKubeConfigs(directory string) ([]string, error) {
-	var kubeConfigs []string
+func getKubeconfigs(directory string) ([]string, error) {
+	var kubeconfigs []string
 	viper.SetConfigType("yaml")
 	err := filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
@@ -102,63 +102,63 @@ func getKubeConfigs(directory string) ([]string, error) {
 		}
 		if !info.IsDir() {
 			if currentContext := getCurrentContext(path); currentContext != "" {
-				kubeConfigs = append(kubeConfigs, currentContext+"\t"+path)
+				kubeconfigs = append(kubeconfigs, currentContext+"\t"+path)
 			}
 		}
 		return nil
 	})
-	return kubeConfigs, err
+	return kubeconfigs, err
 }
 
-func launchSubShell(kubeConfig, kubeContext string) {
-	os.Setenv("KUBECONTEXT", kubeContext)
-	os.Setenv("KUBECONFIG", kubeConfig)
-	subShell := exec.Command(os.Getenv("SHELL"))
-	subShell.Stdin = os.Stdin
-	subShell.Stdout = os.Stdout
-	subShell.Stderr = os.Stderr
-	if !opts.NoVerboseFlag {
-		fmt.Println("⇲ " + kubeContext)
+func launchSubShell(kubeconfig, kubecontext string) {
+	os.Setenv("KUBECONTEXT", kubecontext)
+	os.Setenv("KUBECONFIG", kubeconfig)
+	shell := exec.Command(os.Getenv("SHELL"))
+	shell.Stdin = os.Stdin
+	shell.Stdout = os.Stdout
+	shell.Stderr = os.Stderr
+	if !opts.noVerboseFlag {
+		fmt.Printf("⇲ %s\n", kubecontext)
 	}
-	subShell.Run()
-	if !opts.NoVerboseFlag {
-		fmt.Println("⇱ " + kubeContext)
+	shell.Run()
+	if !opts.noVerboseFlag {
+		fmt.Printf("⇱ %s\n", kubecontext)
 	}
 }
 
 func processSelection(selection string) {
-	selectedKubeConfig := strings.Split(selection, "\t")
-	kubeContext, kubeConfig := selectedKubeConfig[0], selectedKubeConfig[1]
-	if opts.NoShellFlag {
-		if !opts.NoVerboseFlag {
-			fmt.Println("⮺ " + kubeContext)
+	selectionSplit := strings.Split(selection, "\t")
+	kubecontext, kubeconfig := selectionSplit[0], selectionSplit[1]
+	if opts.noShellFlag {
+		if !opts.noVerboseFlag {
+			fmt.Printf("⮺ %s\n", kubecontext)
 		}
-		exportCmd := "export KUBECONFIG='" + kubeConfig + "'"
+		exportCmd := fmt.Sprintf("export KUBECONFIG='%s'", kubeconfig)
 		if opts.copyClipFlag {
 			copyToClipboard(exportCmd)
 		} else {
 			fmt.Println(exportCmd)
 		}
 	} else {
-		launchSubShell(kubeConfig, kubeContext)
+		launchSubShell(kubeconfig, kubecontext)
 	}
 }
 
 func main(cmd *cobra.Command, args []string) {
 	var wg sync.WaitGroup
 
-	kubeConfigs, err := getKubeConfigs(opts.KubeConfigDir)
+	kubeconfigs, err := getKubeconfigs(opts.kubeconfigsDir)
 	if err != nil {
 		log.Fatalf("failed to parse kubeconfigs: %v", err)
 	}
-	if kubeConfigs == nil {
-		log.Fatalf("no valid kubeconfigs found in: %s", opts.KubeConfigDir)
+	if kubeconfigs == nil {
+		log.Fatalf("no valid kubeconfigs found in: %s", opts.kubeconfigsDir)
 	}
-	sort.Strings(kubeConfigs)
+	sort.Strings(kubeconfigs)
 
 	inputChan := make(chan string)
 	go func() {
-		for _, s := range kubeConfigs {
+		for _, s := range kubeconfigs {
 			inputChan <- s
 		}
 		close(inputChan)
@@ -179,13 +179,13 @@ func main(cmd *cobra.Command, args []string) {
 		true,
 		[]string{
 			"--layout=reverse",
-			"--height=" + opts.SelectionHeight,
 			"--delimiter=\t",
 			"--with-nth=1",
-			"--query=" + query,
 			"--bind=tab:toggle-preview",
 			"--preview-window=hidden,wrap,75%",
-			"--preview={ echo '# {2}'; kubectl config view --kubeconfig {2}; } | " + previewCmd,
+			fmt.Sprintf("--height=%s", opts.selectionHeight),
+			fmt.Sprintf("--query=%s", query),
+			fmt.Sprintf("--preview={ echo '# {2}'; kubectl config view --kubeconfig {2}; } | %s", previewCmd),
 		},
 	)
 	if err != nil {
