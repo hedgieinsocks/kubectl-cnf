@@ -46,7 +46,10 @@ func Execute() {
 func init() {
 	log.SetFlags(0)
 	log.SetPrefix("Error: ")
-	setOpts()
+	viper.SetConfigType("yaml")
+	if err := setOptsFromEnv(); err != nil {
+		log.Fatalf("failed to get homedir: %v", err)
+	}
 	rootCmd.Flags().StringVarP(&opts.kubeconfigsDir, "directory", "d", opts.kubeconfigsDir, "directory with kubeconfigs")
 	rootCmd.Flags().StringVarP(&opts.selectionHeight, "height", "H", opts.selectionHeight, "selection menu height")
 	rootCmd.Flags().BoolVarP(&opts.noVerboseFlag, "no-verbose", "V", opts.noVerboseFlag, "do not print auxiliary messages")
@@ -55,34 +58,25 @@ func init() {
 	rootCmd.Flags().SortFlags = false
 }
 
-func setOpts() {
-	opts.kubeconfigsDir = getenv.String("KCNF_DIR", getKubeconfigsDir())
+func getKubeconfigsDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".kube", "configs"), nil
+}
+
+func setOptsFromEnv() error {
+	dir, err := getKubeconfigsDir()
+	if err != nil {
+		return err
+	}
+	opts.kubeconfigsDir = getenv.String("KCNF_DIR", dir)
 	opts.selectionHeight = getenv.String("KCNF_DIR_HEIGHT", "40%")
 	opts.noVerboseFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
 	opts.noShellFlag = getenv.Bool("KCNF_NO_SHELL", false)
 	opts.copyClipFlag = getenv.Bool("KCNF_COPY_CLIP", false)
-}
-
-func getKubeconfigsDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("failed to get homedir: %v", err)
-	}
-	return filepath.Join(home, ".kube", "configs")
-}
-
-func copyToClipboard(text string) {
-	cb := clipboard.New()
-	if err := cb.CopyText(text); err != nil {
-		log.Fatalf("failed to copy text to clipboard: %v", err)
-	}
-}
-
-func getPreviewCmd() string {
-	if _, err := exec.LookPath("bat"); err != nil {
-		return "cat"
-	}
-	return "bat --style=plain --color=always --language=yaml"
+	return nil
 }
 
 func getCurrentContext(file string) string {
@@ -93,16 +87,15 @@ func getCurrentContext(file string) string {
 	return viper.GetString("current-context")
 }
 
-func getKubeconfigs(directory string) ([]string, error) {
-	var kubeconfigs []string
-	viper.SetConfigType("yaml")
+func getKubeconfigs(directory string) ([][]string, error) {
+	var kubeconfigs [][]string
 	err := filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() {
 			if currentContext := getCurrentContext(path); currentContext != "" {
-				kubeconfigs = append(kubeconfigs, currentContext+"\t"+path)
+				kubeconfigs = append(kubeconfigs, []string{currentContext, path})
 			}
 		}
 		return nil
@@ -110,23 +103,52 @@ func getKubeconfigs(directory string) ([]string, error) {
 	return kubeconfigs, err
 }
 
-func launchSubShell(kubeconfig, kubecontext string) {
+func getPreviewCmd() string {
+	baseCmd := "{ echo '# {2}'; kubectl config view --kubeconfig {2}; }"
+	if _, err := exec.LookPath("bat"); err != nil {
+		return fmt.Sprintf("%s | cat", baseCmd)
+	}
+	return fmt.Sprintf("%s | bat --style=plain --color=always --language=yaml", baseCmd)
+}
+
+func configureFzf(height, query, preview string) (*fzf.Options, error) {
+	return fzf.ParseOptions(
+		true,
+		[]string{
+			"--layout=reverse",
+			"--delimiter=\t",
+			"--with-nth=1",
+			"--bind=tab:toggle-preview",
+			"--preview-window=hidden,wrap,75%",
+			fmt.Sprintf("--height=%s", height),
+			fmt.Sprintf("--query=%s", query),
+			fmt.Sprintf("--preview=%s", preview),
+		},
+	)
+}
+
+func launchShell(shell, kubecontext, kubeconfig string) error {
 	os.Setenv("KUBECONTEXT", kubecontext)
 	os.Setenv("KUBECONFIG", kubeconfig)
-	shell := exec.Command(os.Getenv("SHELL"))
-	shell.Stdin = os.Stdin
-	shell.Stdout = os.Stdout
-	shell.Stderr = os.Stderr
+	cmd := exec.Command(shell)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if !opts.noVerboseFlag {
 		fmt.Printf("⇲ %s\n", kubecontext)
 	}
-	shell.Run()
+	if err := cmd.Run(); err != nil {
+		if !strings.HasPrefix(err.Error(), "exit status") {
+			return err
+		}
+	}
 	if !opts.noVerboseFlag {
 		fmt.Printf("⇱ %s\n", kubecontext)
 	}
+	return nil
 }
 
-func processSelection(selection string) {
+func processSelection(selection string) error {
 	selectionSplit := strings.Split(selection, "\t")
 	kubecontext, kubeconfig := selectionSplit[0], selectionSplit[1]
 	if opts.noShellFlag {
@@ -135,13 +157,20 @@ func processSelection(selection string) {
 		}
 		exportCmd := fmt.Sprintf("export KUBECONFIG='%s'", kubeconfig)
 		if opts.copyClipFlag {
-			copyToClipboard(exportCmd)
+			cb := clipboard.New()
+			if err := cb.CopyText(exportCmd); err != nil {
+				return err
+			}
 		} else {
 			fmt.Println(exportCmd)
 		}
 	} else {
-		launchSubShell(kubeconfig, kubecontext)
+		shell := getenv.String("SHELL", "bash")
+		if err := launchShell(shell, kubecontext, kubeconfig); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func main(cmd *cobra.Command, args []string) {
@@ -149,17 +178,19 @@ func main(cmd *cobra.Command, args []string) {
 
 	kubeconfigs, err := getKubeconfigs(opts.kubeconfigsDir)
 	if err != nil {
-		log.Fatalf("failed to parse kubeconfigs: %v", err)
+		log.Fatalf("failed to retrieve kubeconfigs: %v", err)
 	}
 	if kubeconfigs == nil {
 		log.Fatalf("no valid kubeconfigs found in: %s", opts.kubeconfigsDir)
 	}
-	sort.Strings(kubeconfigs)
+	sort.Slice(kubeconfigs, func(i, j int) bool {
+		return kubeconfigs[i][0] < kubeconfigs[j][0]
+	})
 
 	inputChan := make(chan string)
 	go func() {
 		for _, s := range kubeconfigs {
-			inputChan <- s
+			inputChan <- fmt.Sprintf("%s\t%s", s[0], s[1])
 		}
 		close(inputChan)
 	}()
@@ -169,25 +200,15 @@ func main(cmd *cobra.Command, args []string) {
 	go func() {
 		defer wg.Done()
 		for s := range outputChan {
-			processSelection(s)
+			if err := processSelection(s); err != nil {
+				log.Fatalf("failed to process selection: %v", err)
+			}
 		}
 	}()
 
 	query := strings.Join(args, " ")
-	previewCmd := getPreviewCmd()
-	fzfOptions, err := fzf.ParseOptions(
-		true,
-		[]string{
-			"--layout=reverse",
-			"--delimiter=\t",
-			"--with-nth=1",
-			"--bind=tab:toggle-preview",
-			"--preview-window=hidden,wrap,75%",
-			fmt.Sprintf("--height=%s", opts.selectionHeight),
-			fmt.Sprintf("--query=%s", query),
-			fmt.Sprintf("--preview={ echo '# {2}'; kubectl config view --kubeconfig {2}; } | %s", previewCmd),
-		},
-	)
+	preview := getPreviewCmd()
+	fzfOptions, err := configureFzf(opts.selectionHeight, query, preview)
 	if err != nil {
 		log.Fatalf("failed to parse fzf options: %v", err)
 	}
