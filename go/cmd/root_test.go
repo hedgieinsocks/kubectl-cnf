@@ -30,6 +30,7 @@ func TestSetOptsFromEnv(t *testing.T) {
 	os.Setenv("KCNF_NO_VERBOSE", enabled)
 	os.Setenv("KCNF_NO_SHELL", enabled)
 	os.Setenv("KCNF_COPY_CLIP", enabled)
+	os.Setenv("KCNF_SYMLINK", enabled)
 
 	if err := setOptsFromEnv(); err != nil {
 		t.Fatal(err)
@@ -39,12 +40,14 @@ func TestSetOptsFromEnv(t *testing.T) {
 		t.Fatalf("opts.kubeconfigsDir expected=%q; got=%q", dir, opts.kubeconfigsDir)
 	} else if opts.selectionHeight != height {
 		t.Fatalf("opts.selectionHeight expected=%q; got=%q", height, opts.selectionHeight)
-	} else if !opts.noVerboseFlag {
-		t.Fatalf("opts.noVerboseFlag expected=%t; got=%t", true, opts.noVerboseFlag)
-	} else if !opts.noShellFlag {
-		t.Fatalf("opts.noShellFlag expected=%t; got=%t", true, opts.noShellFlag)
-	} else if !opts.copyClipFlag {
-		t.Fatalf("opts.copyClipFlag expected=%t; got=%t", true, opts.copyClipFlag)
+	} else if !opts.quietFlag {
+		t.Fatalf("opts.noVerboseFlag expected=%t; got=%t", true, opts.quietFlag)
+	} else if !opts.printFlag {
+		t.Fatalf("opts.noShellFlag expected=%t; got=%t", true, opts.printFlag)
+	} else if !opts.clipboardFlag {
+		t.Fatalf("opts.copyClipFlag expected=%t; got=%t", true, opts.clipboardFlag)
+	} else if !opts.symlinkFlag {
+		t.Fatalf("opts.symlinkFlag expected=%t; got=%t", true, opts.symlinkFlag)
 	}
 }
 
@@ -116,6 +119,23 @@ func TestConfigureFzf(t *testing.T) {
 	}
 }
 
+func TestSymlinkKubeconfig(t *testing.T) {
+	os.Setenv("HOME", os.TempDir())
+	dir := fmt.Sprintf("%s/.kube", os.TempDir())
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatalf("failed to create tmp directory: %v", err)
+	}
+	defer os.RemoveAll(dir)
+	file, err := os.CreateTemp(os.TempDir(), "testing-eu-01")
+	if err != nil {
+		t.Fatalf("failed to create tmp file: %v", err)
+	}
+	kubeconfig := file.Name()
+	if err := symlinkKubeconfig(kubeconfig); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLaunchShell(t *testing.T) {
 	shell := os.Getenv("SHELL")
 	kubeconfig := "/home/johndoe/.kube/configs/testing-eu-01"
@@ -127,9 +147,10 @@ func TestLaunchShell(t *testing.T) {
 
 func TestProcessSelection(t *testing.T) {
 	selecion := "testing-eu-01\t/home/johndoe/.kube/configs/testing-eu-01"
-	opts.noShellFlag = true
-	opts.noVerboseFlag = false
-	opts.copyClipFlag = false
+	opts.printFlag = true
+	opts.quietFlag = false
+	opts.clipboardFlag = false
+	opts.symlinkFlag = false
 
 	originalStdout := os.Stdout
 	defer func() { os.Stdout = originalStdout }()

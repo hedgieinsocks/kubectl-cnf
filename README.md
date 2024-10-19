@@ -36,8 +36,9 @@ You can export the following variables to tweak the plugin's behaviour.
 | `KCNF_DIR`        | `~/.kube/configs` | directory with kubeconfigs                                                                            |
 | `KCNF_HEIGHT`     | `40%`             | selection menu height                                                                                 |
 | `KCNF_NO_VERBOSE` |                   | do not print auxiliary messages                                                                       |
-| `KCNF_NO_SHELL`   |                   | do not launch a subshell, instead print `export KUBECONFIG=PATH` to stdout                            |
-| `KCNF_COPY_CLIP`  |                   | when `KCNF_NO_SHELL` is set, copy `export KUBECONFIG=PATH` to clipboard instead of printing to stdout |
+| `KCNF_NO_SHELL`   |                   | print `export KUBECONFIG=PATH` to stdout instead of launching a subshell                              |
+| `KCNF_COPY_CLIP`  |                   | copy `export KUBECONFIG=PATH` to clipboard instead of launching a subshell                            |
+| `KCNF_SYMLINK`    |                   | symlink selected kubeconfig to `~/.kube/config` instead of launching a subshell                       |
 
 ## Usage
 
@@ -48,7 +49,8 @@ Usage:
   kubectl cnf [-h] [<string>]
 
 Flags:
-  -h, --help    show this message
+  -h, --help        show this message
+  -v, --version     show plugin version
 
 Dependencies:
   fzf - https://github.com/junegunn/fzf

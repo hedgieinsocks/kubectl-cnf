@@ -20,9 +20,10 @@ import (
 type options struct {
 	kubeconfigsDir  string
 	selectionHeight string
-	noVerboseFlag   bool
-	noShellFlag     bool
-	copyClipFlag    bool
+	quietFlag       bool
+	printFlag       bool
+	clipboardFlag   bool
+	symlinkFlag     bool
 }
 
 var opts options
@@ -33,7 +34,7 @@ var rootCmd = &cobra.Command{
 	Annotations: map[string]string{
 		cobra.CommandDisplayNameAnnotation: "kubectl cnf",
 	},
-	Version: "v0.0.6",
+	Version: "v0.0.7",
 	Run:     main,
 }
 
@@ -52,9 +53,11 @@ func init() {
 	}
 	rootCmd.Flags().StringVarP(&opts.kubeconfigsDir, "directory", "d", opts.kubeconfigsDir, "directory with kubeconfigs")
 	rootCmd.Flags().StringVarP(&opts.selectionHeight, "height", "H", opts.selectionHeight, "selection menu height")
-	rootCmd.Flags().BoolVarP(&opts.noVerboseFlag, "no-verbose", "V", opts.noVerboseFlag, "do not print auxiliary messages")
-	rootCmd.Flags().BoolVarP(&opts.noShellFlag, "no-shell", "S", opts.noShellFlag, "do not launch a subshell, instead print 'export KUBECONFIG=PATH' to stdout")
-	rootCmd.Flags().BoolVarP(&opts.copyClipFlag, "clipboard", "c", opts.copyClipFlag, "when --no-shell is provided, copy 'export KUBECONFIG=PATH' to clipboard instead of printing to stdout")
+	rootCmd.Flags().BoolVarP(&opts.quietFlag, "quiet", "q", opts.quietFlag, "do not print auxiliary messages")
+	rootCmd.Flags().BoolVarP(&opts.printFlag, "print", "p", opts.printFlag, "print 'export KUBECONFIG=PATH' to stdout instead of launching a subshell")
+	rootCmd.Flags().BoolVarP(&opts.clipboardFlag, "clipboard", "c", opts.clipboardFlag, "copy 'export KUBECONFIG=PATH' to clipboard instead of launching a subshell")
+	rootCmd.Flags().BoolVarP(&opts.symlinkFlag, "link", "l", opts.symlinkFlag, "symlink selected kubeconfig to '~/.kube/config' instead of launching a subshell")
+	rootCmd.MarkFlagsMutuallyExclusive("print", "clipboard", "link")
 	rootCmd.Flags().SortFlags = false
 }
 
@@ -73,9 +76,10 @@ func setOptsFromEnv() error {
 	}
 	opts.kubeconfigsDir = getenv.String("KCNF_DIR", dir)
 	opts.selectionHeight = getenv.String("KCNF_DIR_HEIGHT", "40%")
-	opts.noVerboseFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
-	opts.noShellFlag = getenv.Bool("KCNF_NO_SHELL", false)
-	opts.copyClipFlag = getenv.Bool("KCNF_COPY_CLIP", false)
+	opts.quietFlag = getenv.Bool("KCNF_NO_VERBOSE", false)
+	opts.printFlag = getenv.Bool("KCNF_NO_SHELL", false)
+	opts.clipboardFlag = getenv.Bool("KCNF_COPY_CLIP", false)
+	opts.symlinkFlag = getenv.Bool("KCNF_SYMLINK", false)
 	return nil
 }
 
@@ -127,6 +131,23 @@ func configureFzf(height, query, preview string) (*fzf.Options, error) {
 	)
 }
 
+func symlinkKubeconfig(kubeconfig string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	symlink := filepath.Join(home, ".kube", "config")
+	if _, err := os.Lstat(symlink); err == nil {
+		if err = os.Remove(symlink); err != nil {
+			return err
+		}
+	}
+	if err := os.Symlink(kubeconfig, symlink); err != nil {
+		return err
+	}
+	return nil
+}
+
 func launchShell(shell, kubecontext, kubeconfig string) error {
 	os.Setenv("KUBECONTEXT", kubecontext)
 	os.Setenv("KUBECONFIG", kubeconfig)
@@ -134,7 +155,7 @@ func launchShell(shell, kubecontext, kubeconfig string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if !opts.noVerboseFlag {
+	if !opts.quietFlag {
 		fmt.Printf("⇲ %s\n", kubecontext)
 	}
 	if err := cmd.Run(); err != nil {
@@ -142,7 +163,7 @@ func launchShell(shell, kubecontext, kubeconfig string) error {
 			return err
 		}
 	}
-	if !opts.noVerboseFlag {
+	if !opts.quietFlag {
 		fmt.Printf("⇱ %s\n", kubecontext)
 	}
 	return nil
@@ -151,24 +172,31 @@ func launchShell(shell, kubecontext, kubeconfig string) error {
 func processSelection(selection string) error {
 	selectionSplit := strings.Split(selection, "\t")
 	kubecontext, kubeconfig := selectionSplit[0], selectionSplit[1]
-	if opts.noShellFlag {
-		if !opts.noVerboseFlag {
+	if opts.symlinkFlag || opts.printFlag || opts.clipboardFlag {
+		if !opts.quietFlag {
 			fmt.Printf("⮺ %s\n", kubecontext)
 		}
-		exportCmd := fmt.Sprintf("export KUBECONFIG='%s'", kubeconfig)
-		if opts.copyClipFlag {
-			cb := clipboard.New()
-			if err := cb.CopyText(exportCmd); err != nil {
-				return err
-			}
-		} else {
-			fmt.Println(exportCmd)
-		}
-	} else {
-		shell := getenv.String("SHELL", "bash")
-		if err := launchShell(shell, kubecontext, kubeconfig); err != nil {
+	}
+	if opts.printFlag {
+		fmt.Println(fmt.Sprintf("export KUBECONFIG='%s'", kubeconfig))
+		return nil
+	}
+	if opts.clipboardFlag {
+		cb := clipboard.New()
+		if err := cb.CopyText(fmt.Sprintf("export KUBECONFIG='%s'", kubeconfig)); err != nil {
 			return err
 		}
+		return nil
+	}
+	if opts.symlinkFlag {
+		if err := symlinkKubeconfig(kubeconfig); err != nil {
+			return err
+		}
+		return nil
+	}
+	shell := getenv.String("SHELL", "bash")
+	if err := launchShell(shell, kubecontext, kubeconfig); err != nil {
+		return err
 	}
 	return nil
 }

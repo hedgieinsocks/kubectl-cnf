@@ -17,9 +17,10 @@ Usage:
 Flags:
   -d, --directory string   directory with kubeconfigs (default "/home/user/.kube/configs")
   -H, --height string      selection menu height (default "40%")
-  -V, --no-verbose         do not print auxiliary messages
-  -S, --no-shell           do not launch a subshell, instead print 'export KUBECONFIG=PATH' to stdout
-  -c, --clipboard          when --no-shell is provided, copy 'export KUBECONFIG=PATH' to clipboard instead of printing to stdout
+  -q, --quiet              do not print auxiliary messages
+  -p, --print              print 'export KUBECONFIG=PATH' to stdout instead of launching a subshell
+  -c, --clipboard          copy 'export KUBECONFIG=PATH' to clipboard instead of launching a subshell
+  -l, --link               symlink selected kubeconfig to '~/.kube/config' instead of launching a subshell
   -h, --help               help for kubectl cnf
-  -v, --version            version for kubectl-cnf
+  -v, --version            version for kubectl cnf
   ```

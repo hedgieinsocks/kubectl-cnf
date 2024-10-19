@@ -3,10 +3,18 @@
 [[ -n "${DEBUG}" ]] && set -x
 set -eo pipefail
 
+KCNF_VERSION="v0.0.7"
 KCNF_DIR="${KCNF_DIR:-${HOME}/.kube/configs}"
 KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
 
 DEPENDENCIES=(fzf bat)
+
+### show plugin version and exit
+# arg: none
+show_version() {
+  echo "kubectl cnf version ${KCNF_VERSION}"
+  exit 0
+}
 
 ### show help message and exit
 # arg: none
@@ -18,7 +26,8 @@ Usage:
   kubectl cnf [-h] [<string>]
 
 Flags:
-  -h, --help    show this message
+  -h, --help        show this message
+  -v, --version     show plugin version
 
 Dependencies:
   fzf - https://github.com/junegunn/fzf
@@ -74,7 +83,8 @@ main() {
   local kubeconfigs selected_kubeconfig
 
   check_requirements
-  [[ " $@ " =~ ( -h | --help ) ]] && show_help
+  [[ " $* " =~ ( -h | --help ) ]] && show_help
+  [[ " $* " =~ ( -v | --version ) ]] && show_version
 
   [[ -d "${KCNF_DIR}" ]] || err "directory does not exist: ${KCNF_DIR}"
   kubeconfigs=$(find "${KCNF_DIR}" \( -type f -o -type l \) -exec awk '/^current-context:/ {print FILENAME, $2}' {} +)
@@ -92,21 +102,32 @@ main() {
   export KUBECONFIG="${selected_kubeconfig%% *}"
   export KUBECONTEXT="${selected_kubeconfig##* }"
 
-  if [[ -n "${KCNF_NO_SHELL}" ]]; then
-    EXPORT_COMMAND="export KUBECONFIG='${KUBECONFIG}'"
+  if [[ -n "${KCNF_NO_SHELL}" || -n "${KCNF_COPY_CLIP}" || -n "${KCNF_SYMLINK}" ]]; then
     [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⮺ ${KUBECONTEXT}"
-    if [[ -n "${KCNF_COPY_CLIP}" ]]; then
-      copy_to_clipboard
-    else
-      echo "${EXPORT_COMMAND}"
-    fi
-  else
-    [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
-    "${SHELL}"
-    [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
   fi
 
-  exit 0
+  if [[ -n "${KCNF_NO_SHELL}" ||  -n "${KCNF_COPY_CLIP}" ]]; then
+    EXPORT_COMMAND="export KUBECONFIG='${KUBECONFIG}'"
+  fi
+
+  if [[ -n "${KCNF_NO_SHELL}" ]]; then
+    echo "${EXPORT_COMMAND}"
+    return
+  fi
+
+  if [[ -n "${KCNF_COPY_CLIP}" ]]; then
+    copy_to_clipboard
+    return
+  fi
+
+  if [[ -n "${KCNF_SYMLINK}" ]]; then
+    ln --symbolic --force "${KUBECONFIG}" ~/.kube/config
+    return
+  fi
+
+  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
+  "${SHELL}" || true
+  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
 }
 
 main "$@"

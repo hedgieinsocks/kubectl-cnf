@@ -23,6 +23,8 @@ jobs:
       - run: |
           GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o kubectl-cnf_linux_amd64
       - run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o kubectl-cnf_darwin_amd64
+      - run: |
           GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o kubectl-cnf_darwin_arm64
       - uses: ncipollo/release-action@v1
         with:
