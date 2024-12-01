@@ -3,9 +3,14 @@
 [[ -n "${DEBUG}" ]] && set -x
 set -eo pipefail
 
-KCNF_VERSION="v0.0.7"
+KCNF_VERSION="v0.0.8-dev"
+
 KCNF_DIR="${KCNF_DIR:-${HOME}/.kube/configs}"
 KCNF_HEIGHT="${KCNF_HEIGHT:-40%}"
+KCNF_NO_VERBOSE="${KCNF_NO_VERBOSE:-0}"
+KCNF_NO_SHELL="${KCNF_NO_SHELL:-0}"
+KCNF_COPY_CLIP="${KCNF_COPY_CLIP:-0}"
+KCNF_SYMLINK="${KCNF_SYMLINK:-0}"
 
 DEPENDENCIES=(fzf bat)
 
@@ -13,7 +18,7 @@ DEPENDENCIES=(fzf bat)
 # arg: none
 show_version() {
   echo "kubectl cnf version ${KCNF_VERSION}"
-  exit 0
+  exit
 }
 
 ### show help message and exit
@@ -36,7 +41,7 @@ Dependencies:
 Prerequisites:
   directory '${KCNF_DIR}' populated with kubeconfig files
 EOF
-  exit 0
+  exit
 }
 
 ### ensure that dependencies are installed
@@ -102,32 +107,32 @@ main() {
   export KUBECONFIG="${selected_kubeconfig%% *}"
   export KUBECONTEXT="${selected_kubeconfig##* }"
 
-  if [[ -n "${KCNF_NO_SHELL}" || -n "${KCNF_COPY_CLIP}" || -n "${KCNF_SYMLINK}" ]]; then
-    [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⮺ ${KUBECONTEXT}"
+  if (( KCNF_NO_SHELL )) || (( KCNF_COPY_CLIP )) || (( KCNF_SYMLINK )); then
+    (( KCNF_NO_VERBOSE )) || echo "⮺ ${KUBECONTEXT}"
   fi
 
-  if [[ -n "${KCNF_NO_SHELL}" ||  -n "${KCNF_COPY_CLIP}" ]]; then
+  if (( KCNF_NO_SHELL )) || (( KCNF_COPY_CLIP )); then
     EXPORT_COMMAND="export KUBECONFIG='${KUBECONFIG}'"
   fi
 
-  if [[ -n "${KCNF_NO_SHELL}" ]]; then
+  if (( KCNF_NO_SHELL )); then
     echo "${EXPORT_COMMAND}"
     return
   fi
 
-  if [[ -n "${KCNF_COPY_CLIP}" ]]; then
+  if (( KCNF_COPY_CLIP )); then
     copy_to_clipboard
     return
   fi
 
-  if [[ -n "${KCNF_SYMLINK}" ]]; then
+  if (( KCNF_SYMLINK )); then
     ln --symbolic --force "${KUBECONFIG}" ~/.kube/config
     return
   fi
 
-  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇲ ${KUBECONTEXT}"
+  (( KCNF_NO_VERBOSE )) || echo "⇲ ${KUBECONTEXT}"
   "${SHELL}" || true
-  [[ -n "${KCNF_NO_VERBOSE}" ]] || echo "⇱ ${KUBECONTEXT}"
+  (( KCNF_NO_VERBOSE )) || echo "⇱ ${KUBECONTEXT}"
 }
 
 main "$@"

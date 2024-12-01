@@ -34,7 +34,7 @@ var rootCmd = &cobra.Command{
 	Annotations: map[string]string{
 		cobra.CommandDisplayNameAnnotation: "kubectl cnf",
 	},
-	Version: "v0.0.7",
+	Version: "v0.0.8-dev",
 	Run:     main,
 }
 

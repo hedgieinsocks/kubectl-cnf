@@ -25,20 +25,20 @@ By default, the plugin launches a subshell for the chosen kubeconfig. But you ca
 1. Run `kubectl krew install cnf` or just place `kubectl-cnf` into the directory within your `PATH` (e.g. `~/.local/bin`)
 2. Create the `~/.kube/configs` directory and place your kubeconfigs there (or create symlinks)
 
-The krew verion is a simple bash script, but you can grab a `go` [version](https://github.com/hedgieinsocks/kubectl-cnf/tree/main/go) of the plugin from the [releases](https://github.com/hedgieinsocks/kubectl-cnf/releases) page.
+The krew version is a simple bash script, but you can grab a `go` [version](https://github.com/hedgieinsocks/kubectl-cnf/tree/main/go) of the plugin from the [releases](https://github.com/hedgieinsocks/kubectl-cnf/releases) page.
 
 ## Customization
 
 You can export the following variables to tweak the plugin's behaviour.
 
-| VARIABLE          | DEFAULT           | DETAILS                                                                                               |
-|-------------------|-------------------|-------------------------------------------------------------------------------------------------------|
-| `KCNF_DIR`        | `~/.kube/configs` | directory with kubeconfigs                                                                            |
-| `KCNF_HEIGHT`     | `40%`             | selection menu height                                                                                 |
-| `KCNF_NO_VERBOSE` |                   | do not print auxiliary messages                                                                       |
-| `KCNF_NO_SHELL`   |                   | print `export KUBECONFIG=PATH` to stdout instead of launching a subshell                              |
-| `KCNF_COPY_CLIP`  |                   | copy `export KUBECONFIG=PATH` to clipboard instead of launching a subshell                            |
-| `KCNF_SYMLINK`    |                   | symlink selected kubeconfig to `~/.kube/config` instead of launching a subshell                       |
+| VARIABLE          | DEFAULT           | DETAILS                                                                         |
+|-------------------|-------------------|---------------------------------------------------------------------------------|
+| `KCNF_DIR`        | `~/.kube/configs` | directory with kubeconfigs                                                      |
+| `KCNF_HEIGHT`     | `40%`             | selection menu height                                                           |
+| `KCNF_NO_VERBOSE` | `0`               | do not print auxiliary messages                                                 |
+| `KCNF_NO_SHELL`   | `0`               | print `export KUBECONFIG=PATH` to stdout instead of launching a subshell        |
+| `KCNF_COPY_CLIP`  | `0`               | copy `export KUBECONFIG=PATH` to clipboard instead of launching a subshell      |
+| `KCNF_SYMLINK`    | `0`               | symlink selected kubeconfig to `~/.kube/config` instead of launching a subshell |
 
 ## Usage
 
